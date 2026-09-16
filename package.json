@@ -1,0 +1,33 @@
+{
+  "name": "machinery-wallah-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Machinery Wallah Marketplace & Admin Panel",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "seed:admin": "node src/utils/seedAdmin.js"
+  },
+  "keywords": [
+    "machinery",
+    "marketplace",
+    "express",
+    "mvc",
+    "node"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.3.1",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.5",
+    "multer": "^2.4.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
