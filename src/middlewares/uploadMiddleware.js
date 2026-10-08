@@ -27,14 +27,21 @@ const dynamicStorage = multer.diskStorage({
   },
 })
 
-// File Type Filter for Images
+// File Type Filter for Images & Documents (PDF, DOC, etc.)
 const imageFileFilter = (req, file, cb) => {
-  const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.svg']
+  const allowedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.svg', '.pdf', '.doc', '.docx', '.txt']
   const ext = path.extname(file.originalname).toLowerCase()
-  if (allowedExtensions.includes(ext) || file.mimetype.startsWith('image/')) {
+  if (
+    allowedExtensions.includes(ext) ||
+    file.mimetype.startsWith('image/') ||
+    file.mimetype === 'application/pdf' ||
+    file.mimetype.includes('word') ||
+    file.mimetype.includes('document') ||
+    file.mimetype.includes('octet-stream')
+  ) {
     cb(null, true)
   } else {
-    cb(new Error('Only JPG, JPEG, PNG, WEBP, and SVG image files are allowed'), false)
+    cb(new Error('Only Image and Document files (JPG, PNG, WEBP, PDF, DOC, DOCX) are allowed'), false)
   }
 }
 

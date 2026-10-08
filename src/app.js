@@ -9,7 +9,10 @@ const app = express()
 // Global Middlewares
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      // Allow all origins for seamless development across Flutter Web, Admin, and mobile apps
+      callback(null, true)
+    },
     credentials: true,
   })
 )

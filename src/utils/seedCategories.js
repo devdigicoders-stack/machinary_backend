@@ -6,104 +6,91 @@ import { Category } from '../models/Category.js'
 dotenv.config({ path: path.join(process.cwd(), '.env') })
 
 export const defaultCategories = [
+  // 1. Rent Machines (Earthmoving, Cranes, Road, Concrete)
   {
-    name: 'Excavators',
-    slug: 'excavators',
-    description: 'Hydraulic excavators for construction and mining',
-    image:
-      'https://images.unsplash.com/photo-1541888946425-d0fbb186c5f8?w=200&auto=format&fit=crop&q=80',
+    name: 'Earthmoving & Excavation (Rent)',
+    slug: 'earthmoving-excavation-rent',
+    description: 'Excavators, JCB 3DX, Bulldozers & Backhoe loaders for rent',
+    image: 'https://images.unsplash.com/photo-1541888946425-d0fbb186c5f8?w=300&auto=format&fit=crop&q=80',
+    icon: 'Truck',
     subcategories: 8,
     machinesCount: 124,
     status: 'Active',
   },
   {
-    name: 'Backhoe Loaders',
-    slug: 'backhoe-loaders',
-    description: 'Multi-purpose loaders for various applications',
-    image:
-      'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=200&auto=format&fit=crop&q=80',
-    subcategories: 6,
-    machinesCount: 98,
-    status: 'Active',
-  },
-  {
-    name: 'Wheel Loaders',
-    slug: 'wheel-loaders',
-    description: 'Heavy-duty wheel loaders for material handling',
-    image:
-      'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=200&auto=format&fit=crop&q=80',
-    subcategories: 5,
-    machinesCount: 76,
-    status: 'Active',
-  },
-  {
-    name: 'Dump Trucks',
-    slug: 'dump-trucks',
-    description: 'Tippers and dump trucks for transportation',
-    image:
-      'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=200&auto=format&fit=crop&q=80',
-    subcategories: 7,
-    machinesCount: 110,
-    status: 'Active',
-  },
-  {
-    name: 'Cranes',
-    slug: 'cranes',
-    description: 'Mobile, tower and crawler cranes',
-    image:
-      'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=200&auto=format&fit=crop&q=80',
+    name: 'Cranes & Lifting Equipment (Rent)',
+    slug: 'cranes-lifting-equipment-rent',
+    description: 'Hydraulic Farana, Mobile and Crawler Cranes for rent',
+    image: 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=300&auto=format&fit=crop&q=80',
+    icon: 'Truck',
     subcategories: 6,
     machinesCount: 64,
-    status: 'Inactive',
+    status: 'Active',
+  },
+
+  // 2. Buy & Sell Used Machines
+  {
+    name: 'Used Heavy Earthmovers (Buy/Sell)',
+    slug: 'used-heavy-earthmovers-buy-sell',
+    description: 'Certified pre-owned Excavators, Backhoes and Wheel Loaders for sale',
+    image: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=300&auto=format&fit=crop&q=80',
+    icon: 'ShieldCheck',
+    subcategories: 6,
+    machinesCount: 88,
+    status: 'Active',
   },
   {
-    name: 'Road Rollers',
-    slug: 'road-rollers',
-    description: 'Compaction equipment for road construction',
-    image:
-      'https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=200&auto=format&fit=crop&q=80',
-    subcategories: 4,
+    name: 'Road Construction & Rollers (Buy/Sell)',
+    slug: 'road-construction-rollers-buy-sell',
+    description: 'Used Road Rollers, Motor Graders and Compactors for outright purchase',
+    image: 'https://images.unsplash.com/photo-1508873696983-2df5293cb32f?w=300&auto=format&fit=crop&q=80',
+    icon: 'Truck',
+    subcategories: 5,
     machinesCount: 52,
     status: 'Active',
   },
+
+  // 3. Construction Material Supply
   {
-    name: 'Motor Graders',
-    slug: 'motor-graders',
-    description: 'Graders for road leveling and maintenance',
-    image:
-      'https://images.unsplash.com/photo-1508873696983-2df5293cb32f?w=200&auto=format&fit=crop&q=80',
-    subcategories: 4,
-    machinesCount: 48,
-    status: 'Active',
-  },
-  {
-    name: 'Forklifts',
-    slug: 'forklifts',
-    description: 'Material handling forklifts',
-    image:
-      'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=200&auto=format&fit=crop&q=80',
-    subcategories: 5,
-    machinesCount: 60,
-    status: 'Active',
-  },
-  {
-    name: 'Concrete Equipment',
-    slug: 'concrete-equipment',
-    description: 'Concrete mixers, pumps and related equipment',
-    image:
-      'https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?w=200&auto=format&fit=crop&q=80',
+    name: 'Building & Structural Material',
+    slug: 'building-structural-material',
+    description: 'TMT Steel Rebars, Cement Bags, Ready-Mix Concrete & Bricks supply',
+    image: 'https://images.unsplash.com/photo-1504917599217-d4dc5ebe6122?w=300&auto=format&fit=crop&q=80',
+    icon: 'Layers',
     subcategories: 6,
-    machinesCount: 84,
+    machinesCount: 140,
     status: 'Active',
   },
   {
-    name: 'Generators',
-    slug: 'generators',
-    description: 'Diesel and portable generators',
-    image:
-      'https://images.unsplash.com/photo-1513828583688-c52646db42da?w=200&auto=format&fit=crop&q=80',
+    name: 'Aggregates & Mining Sands',
+    slug: 'aggregates-mining-sands',
+    description: 'River Sand, Coarse Blue Stone Aggregates, Stone Dust & Ballast',
+    image: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=300&auto=format&fit=crop&q=80',
+    icon: 'Layers',
     subcategories: 4,
-    machinesCount: 46,
+    machinesCount: 95,
+    status: 'Active',
+  },
+
+  // 4. Transport & Logistics Vehicles
+  {
+    name: 'Heavy Low-Bed Trailers & Pullers',
+    slug: 'heavy-low-bed-trailers-pullers',
+    description: 'Semi low-bed, hydraulic axle & multi-axle trailers for machine transit',
+    image: 'https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=300&auto=format&fit=crop&q=80',
+    icon: 'Truck',
+    subcategories: 5,
+    machinesCount: 78,
+    status: 'Active',
+  },
+  {
+    name: 'Tippers, Dumpers & Transit Mixers',
+    slug: 'tippers-dumpers-transit-mixers',
+    description: '10 to 18 wheeler Dumper Trucks and Concrete Transit Mixers',
+    image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=300&auto=format&fit=crop&q=80',
+    icon: 'Truck',
+    subcategories: 6,
+    machinesCount: 115,
     status: 'Active',
   },
 ]

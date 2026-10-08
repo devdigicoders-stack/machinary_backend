@@ -13,16 +13,16 @@ import { protect } from '../middlewares/authMiddleware.js'
 
 const router = express.Router()
 
-// Protect all category routes with JWT
-router.use(protect)
+// Public GET routes for App & Web
+router.get('/', getCategories)
+router.get('/:id', getCategoryById)
 
-// Bulk operations
-router.post('/bulk-status', bulkUpdateCategoryStatus)
-router.post('/bulk-delete', bulkDeleteCategories)
-
-// CRUD and status
-router.route('/').get(getCategories).post(createCategory)
-router.route('/:id').get(getCategoryById).put(updateCategory).delete(deleteCategory)
-router.patch('/:id/status', toggleCategoryStatus)
+// Protected Admin/Write routes
+router.post('/bulk-status', protect, bulkUpdateCategoryStatus)
+router.post('/bulk-delete', protect, bulkDeleteCategories)
+router.post('/', protect, createCategory)
+router.put('/:id', protect, updateCategory)
+router.delete('/:id', protect, deleteCategory)
+router.patch('/:id/status', protect, toggleCategoryStatus)
 
 export default router

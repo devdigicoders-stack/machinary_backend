@@ -25,6 +25,6 @@ const handleFileUpload = (req, res, next) => {
 }
 
 // POST /api/v1/upload or /api/v1/upload/:folder (e.g. /api/v1/upload/machines)
-router.post('/:folder?', protect, handleFileUpload, uploadImage)
+router.post('/:folder?', handleFileUpload, uploadImage)
 
 export default router

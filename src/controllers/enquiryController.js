@@ -101,8 +101,30 @@ export const getEnquiryById = async (req, res) => {
 // 3. Create Enquiry
 export const createEnquiry = async (req, res) => {
   try {
-    const { name, phone, email, machine, enquiryType, location, budgetRange, requirementDate, message } =
-      req.body
+    const {
+      name,
+      phone,
+      email,
+      machine,
+      enquiryType,
+      location,
+      budgetRange,
+      requirementDate,
+      message,
+      category,
+      pickupLocation,
+      dropLocation,
+      duration,
+      dailyRate,
+      startDate,
+      endDate,
+      quantity,
+      unit,
+      vehicleType,
+      materialGrade,
+      imageUrl,
+      quotesCount,
+    } = req.body
 
     if (!name || !phone || !machine) {
       return errorResponse(res, 'Name, phone and machine name are required', 400)
@@ -123,6 +145,19 @@ export const createEnquiry = async (req, res) => {
       budgetRange: budgetRange || '',
       requirementDate: requirementDate || 'Immediate',
       message: message || '',
+      category: category || '',
+      pickupLocation: pickupLocation || '',
+      dropLocation: dropLocation || '',
+      duration: duration || '',
+      dailyRate: dailyRate || '',
+      startDate: startDate || '',
+      endDate: endDate || '',
+      quantity: quantity || '',
+      unit: unit || '',
+      vehicleType: vehicleType || '',
+      materialGrade: materialGrade || '',
+      imageUrl: imageUrl || '',
+      quotesCount: quotesCount || 0,
       status: 'New',
     })
 

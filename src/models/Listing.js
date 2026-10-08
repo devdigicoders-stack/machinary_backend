@@ -35,7 +35,7 @@ const listingSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true },
     subtitle: { type: String, default: '' },
     category: { type: String, required: true, index: true },
-    type: { type: String, required: true, enum: ['Rent', 'Sale'], index: true },
+    type: { type: String, required: true, enum: ['Rent', 'Sale', 'Transport', 'MaterialSupply'], index: true },
     rateOrPrice: { type: String, required: true },
     rateUnit: { type: String, default: 'per day' },
     securityDeposit: { type: String, default: 'N/A' },
@@ -61,7 +61,19 @@ const listingSchema = new mongoose.Schema(
 
     // Documents & Moderation
     rcNumber: { type: String, trim: true, default: '' },
-    docStatus: { type: String, default: 'Uploaded & Clear' },
+    documents: {
+      rc: { type: String, default: '' },
+      insurance: { type: String, default: '' },
+      fitness: { type: String, default: '' },
+      serviceRecord: { type: String, default: '' },
+      permit: { type: String, default: '' },
+      puc: { type: String, default: '' },
+      gst: { type: String, default: '' },
+      testReport: { type: String, default: '' },
+      quarryPermit: { type: String, default: '' },
+      weighbridge: { type: String, default: '' },
+    },
+    docStatus: { type: String, default: 'Pending Verification' },
     approvalStatus: {
       type: String,
       default: 'Pending',
@@ -78,7 +90,7 @@ const listingSchema = new mongoose.Schema(
     // Operational Status
     status: {
       type: String,
-      default: 'Active',
+      default: 'Inactive',
       enum: ['Active', 'Inactive', 'Pending', 'Under Review', 'Rejected'],
       index: true,
     },

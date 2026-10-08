@@ -23,23 +23,63 @@ export const getListings = async (req, res) => {
     } = req.query
 
     const filter = {}
+    const andConditions = []
 
     if (search && search.trim()) {
       const searchRegex = new RegExp(search.trim(), 'i')
-      filter.$or = [
-        { title: searchRegex },
-        { subtitle: searchRegex },
-        { listingCode: searchRegex },
-        { ownerName: searchRegex },
-        { ownerPhone: searchRegex },
-        { 'location.city': searchRegex },
-        { 'location.state': searchRegex },
-        { rcNumber: searchRegex },
-      ]
+      andConditions.push({
+        $or: [
+          { title: searchRegex },
+          { subtitle: searchRegex },
+          { listingCode: searchRegex },
+          { ownerName: searchRegex },
+          { ownerPhone: searchRegex },
+          { 'location.city': searchRegex },
+          { 'location.state': searchRegex },
+          { rcNumber: searchRegex },
+        ],
+      })
     }
 
     if (category && category !== 'All') {
-      filter.category = category
+      const cleanCat = category.trim()
+      const lowerCat = cleanCat.toLowerCase()
+
+      // Expand common category synonyms
+      const synonymList = []
+      if (lowerCat.includes('earthmoving') || lowerCat.includes('excavator') || lowerCat.includes('jcb')) {
+        synonymList.push('earthmoving', 'excavator', 'jcb', 'backhoe', 'bulldozer', 'loader', 'skid')
+      } else if (lowerCat.includes('lifting') || lowerCat.includes('crane')) {
+        synonymList.push('crane', 'lifting', 'farana', 'hydra', 'hoist')
+      } else if (lowerCat.includes('road') || lowerCat.includes('roller')) {
+        synonymList.push('road', 'roller', 'paver', 'grader', 'compactor')
+      } else if (lowerCat.includes('concrete') || lowerCat.includes('mixer')) {
+        synonymList.push('concrete', 'mixer', 'pump', 'transit', 'batching')
+      } else if (lowerCat.includes('tipper') || lowerCat.includes('dumper') || lowerCat.includes('vehicle') || lowerCat.includes('trailer')) {
+        synonymList.push('tipper', 'dumper', 'trailer', 'transit', 'vehicle', 'truck')
+      } else if (lowerCat.includes('material') || lowerCat.includes('steel') || lowerCat.includes('brick') || lowerCat.includes('cement')) {
+        synonymList.push('material', 'steel', 'brick', 'cement', 'sand', 'aggregate')
+      } else {
+        const words = cleanCat
+          .split(/[\s,&\(\)\/]+/)
+          .filter((w) => w.length > 2 && !['rent', 'sale', 'equipment', 'buy'].includes(w.toLowerCase()))
+        synonymList.push(...words)
+      }
+
+      const regexPattern = synonymList.length > 0 ? synonymList.join('|') : cleanCat
+      const catRegex = new RegExp(regexPattern, 'i')
+
+      andConditions.push({
+        $or: [
+          { category: catRegex },
+          { subtitle: catRegex },
+          { title: catRegex },
+        ],
+      })
+    }
+
+    if (andConditions.length > 0) {
+      filter.$and = andConditions
     }
 
     if (type && type !== 'All') {
@@ -493,3 +533,300 @@ export const removePromotion = async (req, res) => {
     return errorResponse(res, error.message, 500)
   }
 }
+
+/**
+ * 1. Owner: List Rent Machine
+ */
+export const createRentListing = async (req, res) => {
+  try {
+    const {
+      brand,
+      model,
+      category,
+      rentRate,
+      rateUnit = 'per day',
+      minDuration = 'Flexible',
+      operatorIncluded = false,
+      securityDeposit = 'N/A',
+      year = '2023',
+      workingHours = '0 hrs',
+      location,
+      description = '',
+      images = [],
+      image = '',
+      documents = {},
+    } = req.body
+
+    const ownerName = req.user?.name || req.body.ownerName || 'Machine Owner'
+    const ownerPhone = (req.user?.phone || req.body.ownerPhone || '').toString().replace('+91', '').replace(/\s/g, '').trim()
+
+    const title = `${brand || ''} ${model || ''}`.trim() || 'Machinery on Rent'
+    const listingImages = Array.isArray(images) && images.length > 0 ? images : image ? [image] : []
+
+    const newListing = await Listing.create({
+      title,
+      subtitle: `${category || 'Heavy Machinery'} • For Rent`,
+      category: category || 'Earthmoving Equipment',
+      type: 'Rent',
+      rateOrPrice: rentRate ? `₹${rentRate}` : '₹3,500',
+      rateUnit,
+      securityDeposit,
+      minDuration,
+      operatorIncluded: Boolean(operatorIncluded),
+      modelYear: year,
+      hoursUsed: workingHours,
+      description,
+      ownerName,
+      ownerPhone,
+      location: typeof location === 'object' ? location : { city: location || 'Lucknow', state: 'Uttar Pradesh' },
+      image: listingImages[0] || '',
+      images: listingImages,
+      documents: typeof documents === 'object' ? documents : {},
+      docStatus: Object.values(documents || {}).some(Boolean) ? 'Uploaded (Pending Admin Verification)' : 'Not Uploaded',
+      status: 'Inactive',
+      approvalStatus: 'Pending',
+      availability: 'Available Now',
+    })
+
+    return successResponse(res, 'Rental machine listed successfully. Waiting for admin approval.', newListing, 201)
+  } catch (error) {
+    return errorResponse(res, error.message, 500)
+  }
+}
+
+/**
+ * 2. Owner: List Sell Machine
+ */
+export const createSellListing = async (req, res) => {
+  try {
+    const {
+      brand,
+      model,
+      category,
+      price,
+      condition = 'Used',
+      year = '2022',
+      workingHours = '0 hrs',
+      location,
+      description = '',
+      images = [],
+      image = '',
+      documents = {},
+      specifications = {},
+    } = req.body
+
+    const ownerName = req.user?.name || req.body.ownerName || 'Machine Owner'
+    const ownerPhone = (req.user?.phone || req.body.ownerPhone || '').toString().replace('+91', '').replace(/\s/g, '').trim()
+
+    const title = `${brand || ''} ${model || ''}`.trim() || 'Machine For Sale'
+    const listingImages = Array.isArray(images) && images.length > 0 ? images : image ? [image] : []
+
+    const newListing = await Listing.create({
+      title,
+      subtitle: `${category || 'Heavy Equipment'} • Condition: ${condition}`,
+      category: category || 'Earthmoving Equipment',
+      type: 'Sale',
+      rateOrPrice: price ? (price.toString().startsWith('₹') ? price : `₹${price}`) : '₹18,50,000',
+      rateUnit: '',
+      modelYear: year,
+      hoursUsed: workingHours,
+      description,
+      ownerName,
+      ownerPhone,
+      location: typeof location === 'object' ? location : { city: location || 'Lucknow', state: 'Uttar Pradesh' },
+      image: listingImages[0] || '',
+      images: listingImages,
+      documents: typeof documents === 'object' ? documents : {},
+      docStatus: Object.values(documents || {}).some(Boolean) ? 'Uploaded (Pending Admin Verification)' : 'Not Uploaded',
+      status: 'Inactive',
+      approvalStatus: 'Pending',
+      availability: 'Available Now',
+      specifications: { ...specifications, condition },
+    })
+
+    return successResponse(res, 'Machine for sale listed successfully. Waiting for admin approval.', newListing, 201)
+  } catch (error) {
+    return errorResponse(res, error.message, 500)
+  }
+}
+
+/**
+ * 3. Owner: List Transport Vehicle
+ */
+export const createTransportListing = async (req, res) => {
+  try {
+    const {
+      vehicleType,
+      brand,
+      model,
+      capacity,
+      bodyType,
+      regNumber,
+      fuelType,
+      ratePerKm,
+      minCharge,
+      routes,
+      availableFrom,
+      location,
+      images = [],
+      image = '',
+      documents = {},
+    } = req.body
+
+    const ownerName = req.user?.name || req.body.ownerName || 'Transport Operator'
+    const ownerPhone = (req.user?.phone || req.body.ownerPhone || '').toString().replace('+91', '').replace(/\s/g, '').trim()
+
+    const title = `${brand || ''} ${model || ''} (${bodyType || vehicleType || 'Transport Truck'})`.trim()
+    const listingImages = Array.isArray(images) && images.length > 0 ? images : image ? [image] : []
+
+    const newListing = await Listing.create({
+      title,
+      subtitle: `Capacity: ${capacity || '10 Ton'} • ${routes || 'All India Permit'}`,
+      category: 'Transport Vehicle',
+      type: 'Transport',
+      rateOrPrice: ratePerKm ? `₹${ratePerKm}/km` : '₹45/km',
+      rateUnit: 'per km',
+      rcNumber: regNumber || '',
+      minDuration: availableFrom || 'Immediate',
+      description: `Routes: ${routes || 'Local & Interstate'}. Min Booking: ₹${minCharge || '2500'}. Fuel: ${fuelType || 'Diesel'}`,
+      ownerName,
+      ownerPhone,
+      location: typeof location === 'object' ? location : { city: location || 'Lucknow', state: 'Uttar Pradesh' },
+      image: listingImages[0] || '',
+      images: listingImages,
+      documents: typeof documents === 'object' ? documents : {},
+      docStatus: Object.values(documents || {}).some(Boolean) ? 'Uploaded (Pending Admin Verification)' : 'Not Uploaded',
+      status: 'Inactive',
+      approvalStatus: 'Pending',
+      availability: 'Available Now',
+      specifications: {
+        vehicleType,
+        capacity,
+        bodyType,
+        fuelType,
+        minCharge,
+        routes,
+      },
+    })
+
+    return successResponse(res, 'Transport vehicle listed successfully. Waiting for admin approval.', newListing, 201)
+  } catch (error) {
+    return errorResponse(res, error.message, 500)
+  }
+}
+
+/**
+ * 4. Owner: List Material Supply
+ */
+export const createMaterialListing = async (req, res) => {
+  try {
+    const {
+      materialName,
+      materialCategory,
+      grade,
+      unitPrice,
+      supplyUnit = 'Ton',
+      minOrder = '10 Ton',
+      deliveryType = 'Available',
+      dailyCapacity = '500 Ton/Day',
+      leadTime = '24 Hours',
+      supplyArea = 'Local & Nearby',
+      location,
+      description = '',
+      images = [],
+      image = '',
+      documents = {},
+    } = req.body
+
+    const ownerName = req.user?.name || req.body.ownerName || 'Material Supplier'
+    const ownerPhone = (req.user?.phone || req.body.ownerPhone || '').toString().replace('+91', '').replace(/\s/g, '').trim()
+
+    const title = `${materialName || materialCategory || 'Construction Material'} (${grade || 'Standard'})`.trim()
+    const listingImages = Array.isArray(images) && images.length > 0 ? images : image ? [image] : []
+
+    const newListing = await Listing.create({
+      title,
+      subtitle: `Category: ${materialCategory || 'Construction Material'} • Min Order: ${minOrder}`,
+      category: 'Construction Material',
+      type: 'MaterialSupply',
+      rateOrPrice: unitPrice ? `₹${unitPrice}/${supplyUnit}` : '₹3,800/Ton',
+      rateUnit: `per ${supplyUnit}`,
+      description: `${description || ''} Delivery: ${deliveryType}. Capacity: ${dailyCapacity}. Supply Area: ${supplyArea}`,
+      ownerName,
+      ownerPhone,
+      location: typeof location === 'object' ? location : { city: location || 'Lucknow', state: 'Uttar Pradesh' },
+      image: listingImages[0] || '',
+      images: listingImages,
+      documents: typeof documents === 'object' ? documents : {},
+      docStatus: Object.values(documents || {}).some(Boolean) ? 'Uploaded (Pending Admin Verification)' : 'Not Uploaded',
+      status: 'Inactive',
+      approvalStatus: 'Pending',
+      availability: 'Available Now',
+      specifications: {
+        materialCategory,
+        grade,
+        supplyUnit,
+        minOrder,
+        deliveryType,
+        dailyCapacity,
+        leadTime,
+        supplyArea,
+      },
+    })
+
+    return successResponse(res, 'Material supply listed successfully. Waiting for admin approval.', newListing, 201)
+  } catch (error) {
+    return errorResponse(res, error.message, 500)
+  }
+}
+
+/**
+ * 5. Owner: Get My Listings (Strict Owner Data Isolation)
+ */
+export const getMyListings = async (req, res) => {
+  try {
+    const { phone, type, category, status } = req.query
+    const rawPhone = req.user?.phone || phone || ''
+    const cleanPhone = rawPhone.replace('+91', '').replace(/\s/g, '').trim()
+
+    // Strict Owner Isolation: If no owner phone is provided or identified, return 0 listings
+    if (!cleanPhone) {
+      return successResponse(res, 'My listings retrieved successfully', {
+        total: 0,
+        listings: [],
+      })
+    }
+
+    const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone
+    const phoneRegex = new RegExp(last10 + '$', 'i')
+
+    const filter = {
+      $or: [
+        { ownerPhone: cleanPhone },
+        { ownerPhone: rawPhone.trim() },
+        { ownerPhone: phoneRegex },
+      ],
+    }
+
+    if (type && type !== 'All') {
+      filter.type = type
+    }
+    if (category && category !== 'All') {
+      filter.category = category
+    }
+    if (status && status !== 'All') {
+      filter.status = status
+    }
+
+    const listings = await Listing.find(filter).sort('-createdAt').limit(100).lean()
+
+    return successResponse(res, 'My listings retrieved successfully', {
+      total: listings.length,
+      listings,
+    })
+  } catch (error) {
+    return errorResponse(res, error.message, 500)
+  }
+}
+
+

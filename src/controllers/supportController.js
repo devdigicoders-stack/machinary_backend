@@ -1,5 +1,6 @@
 import { SupportTicket } from '../models/SupportTicket.js'
 import { successResponse, errorResponse } from '../utils/apiResponse.js'
+import { emitSupportMessage } from '../socket.js'
 
 // 1. Get Support KPI Stats
 export const getSupportStats = async (req, res) => {
@@ -259,6 +260,12 @@ export const addTicketMessage = async (req, res) => {
     }
 
     await ticket.save()
+
+    // Real-time broadcast to mobile app & admin panel via Socket.IO
+    emitSupportMessage(ticket._id.toString(), msg, ticket)
+    if (ticket.ticketId) {
+      emitSupportMessage(ticket.ticketId, msg, ticket)
+    }
 
     return successResponse(res, 'Message sent successfully', ticket)
   } catch (err) {

@@ -19,10 +19,17 @@ export const getCustomers = async (req, res) => {
 
     const query = {}
 
-    // Search term across name, email, phone, location
+    // Search term across name, email, phone, location, businessName
     if (search && search.trim()) {
       const regex = new RegExp(search.trim(), 'i')
-      query.$or = [{ name: regex }, { email: regex }, { phone: regex }, { location: regex }]
+      query.$or = [
+        { name: regex },
+        { email: regex },
+        { phone: regex },
+        { location: regex },
+        { businessName: regex },
+        { companyName: regex },
+      ]
     }
 
     // Status filter
@@ -57,10 +64,31 @@ export const getCustomers = async (req, res) => {
     const sortObj = { [sortBy]: sortOrder }
 
     // Execute query with pagination
-    const [customers, totalFiltered] = await Promise.all([
+    const [rawCustomers, totalFiltered] = await Promise.all([
       Customer.find(query).sort(sortObj).skip(skip).limit(limitNum).lean(),
       Customer.countDocuments(query),
     ])
+
+    // Import Enquiry model dynamically or aggregate request count
+    const { Enquiry } = await import('../models/Enquiry.js')
+
+    // Attach dynamic requestsCount for each customer
+    const customers = await Promise.all(
+      rawCustomers.map(async (c) => {
+        const cleanPhone = (c.phone || '').replace('+91', '').replace(/\s/g, '').trim()
+        const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone
+        const phoneRegex = new RegExp(last10 + '$', 'i')
+        
+        const count = await Enquiry.countDocuments({
+          $or: [{ phone: cleanPhone }, { customerPhone: cleanPhone }, { phone: phoneRegex }, { customerPhone: phoneRegex }],
+        })
+        return {
+          ...c,
+          requestsCount: count,
+          requests: count,
+        }
+      })
+    )
 
     // Compute live platform customer stats
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
@@ -106,25 +134,131 @@ export const getCustomerById = async (req, res) => {
   }
 }
 
-// 3. Create New Customer
+// 3. Customer App: Get Customer Profile By Phone or Create if not exists (Login / Auto-Profile)
+export const getOrCreateCustomerProfile = async (req, res) => {
+  try {
+    const rawPhone = (req.query.phone || req.body.phone || '').toString()
+    if (!rawPhone || !rawPhone.trim()) {
+      return errorResponse(res, 'Phone number is required', 400)
+    }
+
+    const cleanPhone = rawPhone.replace('+91', '').replace(/\s/g, '').trim()
+    const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone
+    const phoneRegex = new RegExp(last10 + '$', 'i')
+
+    let customer = await Customer.findOne({
+      $or: [{ phone: cleanPhone }, { phone: rawPhone.trim() }, { phone: phoneRegex }],
+    })
+
+    if (!customer) {
+      // Auto-create customer profile on first mobile login
+      customer = await Customer.create({
+        phone: cleanPhone,
+        name: req.body.name || 'Customer',
+        email: req.body.email || '',
+        location: 'India',
+        status: 'Active',
+      })
+    }
+
+    return successResponse(res, 'Customer profile retrieved successfully', customer)
+  } catch (error) {
+    return errorResponse(res, error.message, 500)
+  }
+}
+
+// 4. Customer App: Update Customer Profile (Sync with MongoDB)
+export const updateCustomerProfile = async (req, res) => {
+  try {
+    const {
+      phone,
+      name,
+      email,
+      companyName,
+      businessName,
+      gstNumber,
+      address,
+      city,
+      state,
+      pincode,
+      location,
+      avatar,
+      avatarZoom,
+      avatarPanX,
+      avatarPanY,
+    } = req.body
+
+    const rawPhone = (phone || req.query.phone || '').toString()
+    if (!rawPhone || !rawPhone.trim()) {
+      return errorResponse(res, 'Phone number is required to update profile', 400)
+    }
+
+    const cleanPhone = rawPhone.replace('+91', '').replace(/\s/g, '').trim()
+    const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone
+    const phoneRegex = new RegExp(last10 + '$', 'i')
+
+    let customer = await Customer.findOne({
+      $or: [{ phone: cleanPhone }, { phone: rawPhone.trim() }, { phone: phoneRegex }],
+    })
+
+    const updateFields = {}
+    if (name !== undefined) updateFields.name = name.trim()
+    if (email !== undefined) updateFields.email = email.trim()
+    if (companyName !== undefined) {
+      updateFields.companyName = companyName.trim()
+      updateFields.businessName = companyName.trim()
+    }
+    if (businessName !== undefined) updateFields.businessName = businessName.trim()
+    if (gstNumber !== undefined) updateFields.gstNumber = gstNumber.trim()
+    if (address !== undefined) updateFields.address = address.trim()
+    if (city !== undefined) updateFields.city = city.trim()
+    if (state !== undefined) updateFields.state = state.trim()
+    if (pincode !== undefined) updateFields.pincode = pincode.trim()
+    if (location !== undefined) updateFields.location = location.trim()
+    if (avatar !== undefined) updateFields.avatar = avatar
+    if (avatarZoom !== undefined) updateFields.avatarZoom = Number(avatarZoom) || 1.0
+    if (avatarPanX !== undefined) updateFields.avatarPanX = Number(avatarPanX) || 0.0
+    if (avatarPanY !== undefined) updateFields.avatarPanY = Number(avatarPanY) || 0.0
+
+    if (!customer) {
+      customer = await Customer.create({
+        phone: cleanPhone,
+        ...updateFields,
+      })
+    } else {
+      customer = await Customer.findByIdAndUpdate(
+        customer._id,
+        { $set: updateFields },
+        { new: true }
+      )
+    }
+
+    return successResponse(res, 'Profile updated and saved to database successfully', customer)
+  } catch (error) {
+    return errorResponse(res, error.message, 500)
+  }
+}
+
+// 5. Create New Customer (Admin Panel)
 export const createCustomer = async (req, res) => {
   try {
     const { name, email, phone, location, registrationType, businessName, status, listings } =
       req.body
 
-    if (!name || !email || !phone) {
-      return errorResponse(res, 'Name, email and phone number are required', 400)
+    if (!phone) {
+      return errorResponse(res, 'Phone number is required', 400)
     }
 
-    const existingCustomer = await Customer.findOne({ email: email.toLowerCase() })
+    const cleanPhone = phone.replace('+91', '').replace(/\s/g, '').trim()
+    const existingCustomer = await Customer.findOne({ phone: cleanPhone })
     if (existingCustomer) {
-      return errorResponse(res, 'A customer with this email already exists', 400)
+      return errorResponse(res, 'A customer with this phone number already exists', 400)
     }
 
     const customer = await Customer.create({
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
-      phone: phone.trim(),
+      name: name ? name.trim() : 'Customer',
+      email: email ? email.toLowerCase().trim() : '',
+      phone: cleanPhone,
       location: location || 'India',
       registrationType: registrationType || 'Individual',
       businessName: businessName || '',
@@ -138,7 +272,7 @@ export const createCustomer = async (req, res) => {
   }
 }
 
-// 4. Update Customer
+// 6. Update Customer (Admin Panel)
 export const updateCustomer = async (req, res) => {
   try {
     const { name, email, phone, location, registrationType, businessName, status, listings } =
@@ -149,19 +283,9 @@ export const updateCustomer = async (req, res) => {
       return errorResponse(res, 'Customer not found', 404)
     }
 
-    if (email && email.toLowerCase() !== customer.email) {
-      const emailTaken = await Customer.findOne({
-        email: email.toLowerCase(),
-        _id: { $ne: customer._id },
-      })
-      if (emailTaken) {
-        return errorResponse(res, 'Email address is already in use by another customer', 400)
-      }
-      customer.email = email.toLowerCase()
-    }
-
     if (name) customer.name = name.trim()
-    if (phone) customer.phone = phone.trim()
+    if (phone) customer.phone = phone.replace('+91', '').replace(/\s/g, '').trim()
+    if (email !== undefined) customer.email = email.toLowerCase().trim()
     if (location !== undefined) customer.location = location
     if (registrationType) customer.registrationType = registrationType
     if (businessName !== undefined) customer.businessName = businessName
@@ -176,7 +300,7 @@ export const updateCustomer = async (req, res) => {
   }
 }
 
-// 5. Toggle Customer Status (Active <-> Inactive)
+// 7. Toggle Customer Status (Active <-> Inactive)
 export const toggleCustomerStatus = async (req, res) => {
   try {
     const customer = await Customer.findById(req.params.id)
@@ -197,7 +321,7 @@ export const toggleCustomerStatus = async (req, res) => {
   }
 }
 
-// 6. Delete Customer
+// 8. Delete Customer
 export const deleteCustomer = async (req, res) => {
   try {
     const customer = await Customer.findByIdAndDelete(req.params.id)
@@ -211,7 +335,7 @@ export const deleteCustomer = async (req, res) => {
   }
 }
 
-// 7. Bulk Delete Customers
+// 9. Bulk Delete Customers
 export const bulkDeleteCustomers = async (req, res) => {
   try {
     const { ids } = req.body
@@ -230,7 +354,7 @@ export const bulkDeleteCustomers = async (req, res) => {
   }
 }
 
-// 8. Bulk Update Status (Active / Inactive)
+// 10. Bulk Update Status (Active / Inactive)
 export const bulkUpdateStatus = async (req, res) => {
   try {
     const { ids, status } = req.body
