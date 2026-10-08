@@ -1,4 +1,7 @@
 import { Notification } from '../models/Notification.js'
+import { Customer } from '../models/Customer.js'
+import { Owner } from '../models/Owner.js'
+import { sendPushNotification } from '../utils/fcmService.js'
 import { successResponse, errorResponse } from '../utils/apiResponse.js'
 
 // 1. Get Notification KPI Stats
@@ -115,6 +118,34 @@ export const createNotification = async (req, res) => {
       return errorResponse(res, 'Title and message are required', 400)
     }
 
+    // Collect targeted device tokens from Customers and/or Owners
+    let targetTokens = []
+    if (type === 'Push' && !isScheduled) {
+      if (audience === 'All Users' || audience === 'Customers') {
+        const customers = await Customer.find({ 'fcmTokens.0': { $exists: true } }, 'fcmTokens')
+        customers.forEach((c) => {
+          if (c.fcmTokens?.length) targetTokens.push(...c.fcmTokens)
+        })
+      }
+      if (audience === 'All Users' || audience === 'Owners') {
+        const owners = await Owner.find({ 'fcmTokens.0': { $exists: true } }, 'fcmTokens')
+        owners.forEach((o) => {
+          if (o.fcmTokens?.length) targetTokens.push(...o.fcmTokens)
+        })
+      }
+      // Deduplicate
+      targetTokens = [...new Set(targetTokens)]
+
+      if (targetTokens.length > 0) {
+        await sendPushNotification({
+          tokens: targetTokens,
+          title: title.trim(),
+          body: message.trim(),
+          data: { type: 'BROADCAST', audience },
+        })
+      }
+    }
+
     const item = await Notification.create({
       title: title.trim(),
       message: message.trim(),
@@ -124,7 +155,7 @@ export const createNotification = async (req, res) => {
       isScheduled: Boolean(isScheduled),
       scheduledDate,
       scheduledTime,
-      recipientCount: audience === 'All Users' ? 1620 : audience === 'Owners' ? 380 : 1240,
+      recipientCount: targetTokens.length || (audience === 'All Users' ? 1620 : audience === 'Owners' ? 380 : 1240),
       isRead: false,
     })
 
@@ -144,6 +175,28 @@ export const resendNotification = async (req, res) => {
     item.status = 'Delivered'
     item.isScheduled = false
     await item.save()
+
+    // Resend via FCM
+    let targetTokens = []
+    if (item.type === 'Push') {
+      if (item.targetAudience === 'All Users' || item.targetAudience === 'Customers') {
+        const customers = await Customer.find({ 'fcmTokens.0': { $exists: true } }, 'fcmTokens')
+        customers.forEach((c) => targetTokens.push(...(c.fcmTokens || [])))
+      }
+      if (item.targetAudience === 'All Users' || item.targetAudience === 'Owners') {
+        const owners = await Owner.find({ 'fcmTokens.0': { $exists: true } }, 'fcmTokens')
+        owners.forEach((o) => targetTokens.push(...(o.fcmTokens || [])))
+      }
+      targetTokens = [...new Set(targetTokens)]
+      if (targetTokens.length > 0) {
+        await sendPushNotification({
+          tokens: targetTokens,
+          title: item.title,
+          body: item.message,
+          data: { type: 'BROADCAST', audience: item.targetAudience },
+        })
+      }
+    }
 
     return successResponse(res, `Notification "${item.title}" re-sent successfully`, item)
   } catch (err) {

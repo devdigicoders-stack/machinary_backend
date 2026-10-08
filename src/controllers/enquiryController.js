@@ -1,4 +1,7 @@
 import { Enquiry } from '../models/Enquiry.js'
+import { Owner } from '../models/Owner.js'
+import { Customer } from '../models/Customer.js'
+import { sendPushNotification } from '../utils/fcmService.js'
 import { successResponse, errorResponse } from '../utils/apiResponse.js'
 
 // 1. Get All Enquiries (with search, filter, pagination, and real-time live counts)
@@ -161,6 +164,32 @@ export const createEnquiry = async (req, res) => {
       status: 'New',
     })
 
+    // 🔥 Send instant FCM push notification to Equipment / Machinery Owners
+    try {
+      const owners = await Owner.find({ 'fcmTokens.0': { $exists: true } }, 'fcmTokens')
+      let ownerTokens = []
+      owners.forEach((o) => {
+        if (o.fcmTokens?.length) ownerTokens.push(...o.fcmTokens)
+      })
+      ownerTokens = [...new Set(ownerTokens)]
+
+      if (ownerTokens.length > 0) {
+        await sendPushNotification({
+          tokens: ownerTokens,
+          title: `🚜 Nayi Requirement: ${machine}`,
+          body: `${name} ko ${location || 'aapke area'} me ${enquiryType || 'Buy/Rent'} ke liye ${machine} ki requirement hai. Tap karke lead check karein!`,
+          data: {
+            type: 'NEW_ENQUIRY',
+            enquiryId: enquiry._id.toString(),
+            machine,
+            enquiryType: enquiryType || 'Buy',
+          },
+        })
+      }
+    } catch (pushErr) {
+      console.warn('⚠️ [FCM] Lead notification to owners failed:', pushErr.message)
+    }
+
     return successResponse(res, 'Enquiry created successfully', enquiry, 201)
   } catch (error) {
     return errorResponse(res, error.message, 500)
@@ -191,6 +220,29 @@ export const updateEnquiryStatus = async (req, res) => {
     })
 
     await enquiry.save()
+
+    // 🔥 Send Push notification to Customer about update
+    try {
+      const customerPhone = enquiry.customerPhone || enquiry.phone
+      if (customerPhone) {
+        const cleanPhone = customerPhone.replace('+91', '').replace(/\s/g, '').trim()
+        const customer = await Customer.findOne({ phone: new RegExp(cleanPhone.slice(-10) + '$', 'i') })
+        if (customer && customer.fcmTokens?.length > 0) {
+          await sendPushNotification({
+            tokens: customer.fcmTokens,
+            title: `📋 Enquiry Update: ${enquiry.machine}`,
+            body: `Aapki enquiry (${enquiry.enquiryId || enquiry.machine}) ka status ab "${status}" mark kar diya gaya hai.`,
+            data: {
+              type: 'ENQUIRY_STATUS_UPDATE',
+              enquiryId: enquiry._id.toString(),
+              status,
+            },
+          })
+        }
+      }
+    } catch (pushErr) {
+      console.warn('⚠️ [FCM] Status update push notification failed:', pushErr.message)
+    }
 
     return successResponse(res, `Enquiry status changed to "${status}"`, enquiry)
   } catch (error) {

@@ -34,6 +34,7 @@ const customerSchema = new mongoose.Schema(
     avatarZoom: { type: Number, default: 1.0 },
     avatarPanX: { type: Number, default: 0.0 },
     avatarPanY: { type: Number, default: 0.0 },
+    fcmTokens: [{ type: String }],
   },
   { timestamps: true }
 )

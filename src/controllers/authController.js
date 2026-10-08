@@ -370,6 +370,11 @@ export const verifyOwnerOtp = async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN || '30d' }
     )
 
+    const fcmToken = req.body.fcmToken || req.body.fcm_token
+    if (fcmToken && !owner.fcmTokens?.includes(fcmToken)) {
+      await Owner.findByIdAndUpdate(owner._id, { $addToSet: { fcmTokens: fcmToken } })
+    }
+
     return successResponse(res, 'Owner logged in successfully', {
       isNewUser: false,
       token,
@@ -521,6 +526,12 @@ export const updateOwnerProfile = async (req, res) => {
     }
     if (gstNumber !== undefined) owner.gstNumber = gstNumber.trim()
     if (avatarImg !== undefined) owner.avatarImg = avatarImg
+
+    const fcmToken = req.body.fcmToken || req.body.token
+    if (fcmToken && !owner.fcmTokens?.includes(fcmToken)) {
+      owner.fcmTokens = owner.fcmTokens || []
+      owner.fcmTokens.push(fcmToken)
+    }
 
     await owner.save()
 

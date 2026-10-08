@@ -45,6 +45,7 @@ const ownerSchema = new mongoose.Schema(
     },
     notes: [noteSchema],
     history: [historySchema],
+    fcmTokens: [{ type: String }],
   },
   {
     timestamps: true,

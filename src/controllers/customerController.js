@@ -220,15 +220,22 @@ export const updateCustomerProfile = async (req, res) => {
     if (avatarPanX !== undefined) updateFields.avatarPanX = Number(avatarPanX) || 0.0
     if (avatarPanY !== undefined) updateFields.avatarPanY = Number(avatarPanY) || 0.0
 
+    const fcmToken = req.body.fcmToken || req.body.token
+
     if (!customer) {
       customer = await Customer.create({
         phone: cleanPhone,
+        ...(fcmToken ? { fcmTokens: [fcmToken] } : {}),
         ...updateFields,
       })
     } else {
+      const updateQuery = { $set: updateFields }
+      if (fcmToken && !customer.fcmTokens?.includes(fcmToken)) {
+        updateQuery.$addToSet = { fcmTokens: fcmToken }
+      }
       customer = await Customer.findByIdAndUpdate(
         customer._id,
-        { $set: updateFields },
+        updateQuery,
         { new: true }
       )
     }
