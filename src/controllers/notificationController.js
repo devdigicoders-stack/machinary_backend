@@ -1,6 +1,7 @@
 import { Notification } from '../models/Notification.js'
 import { Customer } from '../models/Customer.js'
 import { Owner } from '../models/Owner.js'
+import { DeviceToken } from '../models/DeviceToken.js'
 import { sendPushNotification } from '../utils/fcmService.js'
 import { successResponse, errorResponse } from '../utils/apiResponse.js'
 
@@ -118,7 +119,7 @@ export const createNotification = async (req, res) => {
       return errorResponse(res, 'Title and message are required', 400)
     }
 
-    // Collect targeted device tokens from Customers and/or Owners
+    // Collect targeted device tokens from DeviceToken, Customers and Owners
     let targetTokens = []
     if (type === 'Push' && !isScheduled) {
       if (audience === 'All Users' || audience === 'Customers') {
@@ -133,8 +134,18 @@ export const createNotification = async (req, res) => {
           if (o.fcmTokens?.length) targetTokens.push(...o.fcmTokens)
         })
       }
+      
+      // Also fetch from standalone DeviceToken collection
+      const deviceQuery = {}
+      if (audience === 'Customers') deviceQuery.role = { $in: ['customer', 'all'] }
+      else if (audience === 'Owners') deviceQuery.role = { $in: ['owner', 'all'] }
+      const deviceTokens = await DeviceToken.find(deviceQuery, 'token')
+      deviceTokens.forEach((d) => {
+        if (d.token) targetTokens.push(d.token)
+      })
+
       // Deduplicate
-      targetTokens = [...new Set(targetTokens)]
+      targetTokens = [...new Set(targetTokens.filter((t) => typeof t === 'string' && t.trim().length > 10))]
 
       if (targetTokens.length > 0) {
         await sendPushNotification({
@@ -183,11 +194,16 @@ export const resendNotification = async (req, res) => {
         const customers = await Customer.find({ 'fcmTokens.0': { $exists: true } }, 'fcmTokens')
         customers.forEach((c) => targetTokens.push(...(c.fcmTokens || [])))
       }
-      if (item.targetAudience === 'All Users' || item.targetAudience === 'Owners') {
-        const owners = await Owner.find({ 'fcmTokens.0': { $exists: true } }, 'fcmTokens')
-        owners.forEach((o) => targetTokens.push(...(o.fcmTokens || [])))
-      }
-      targetTokens = [...new Set(targetTokens)]
+      // Also fetch from standalone DeviceToken collection
+      const deviceQuery = {}
+      if (item.targetAudience === 'Customers') deviceQuery.role = { $in: ['customer', 'all'] }
+      else if (item.targetAudience === 'Owners') deviceQuery.role = { $in: ['owner', 'all'] }
+      const deviceTokens = await DeviceToken.find(deviceQuery, 'token')
+      deviceTokens.forEach((d) => {
+        if (d.token) targetTokens.push(d.token)
+      })
+
+      targetTokens = [...new Set(targetTokens.filter((t) => typeof t === 'string' && t.trim().length > 10))]
       if (targetTokens.length > 0) {
         await sendPushNotification({
           tokens: targetTokens,
@@ -231,3 +247,123 @@ export const bulkDelete = async (req, res) => {
     return errorResponse(res, 'Failed bulk delete', 500, err.message)
   }
 }
+
+// 7. Register / Update FCM Device Token
+export const registerToken = async (req, res) => {
+  try {
+    const { token, fcmToken, role = 'all', phone } = req.body
+    const deviceToken = (fcmToken || token || '').trim()
+
+    if (!deviceToken) {
+      return errorResponse(res, 'FCM token is required', 400)
+    }
+
+    const cleanPhone = phone ? phone.replace('+91', '').replace(/\s+/g, '').trim() : null
+
+    // 1. Always upsert in DeviceToken collection so device can receive push even if not logged in
+    await DeviceToken.findOneAndUpdate(
+      { token: deviceToken },
+      {
+        token: deviceToken,
+        role: role || 'all',
+        phone: cleanPhone || '',
+        lastActive: new Date(),
+      },
+      { upsert: true, new: true }
+    )
+
+    let updated = false
+
+    // 2. If phone is provided, match customer/owner by phone
+    if (cleanPhone) {
+      if (role === 'customer' || role === 'all') {
+        const cust = await Customer.findOneAndUpdate(
+          { phone: cleanPhone },
+          { $addToSet: { fcmTokens: deviceToken } },
+          { new: true }
+        )
+        if (cust) updated = true
+      }
+      if (role === 'owner' || role === 'all') {
+        const own = await Owner.findOneAndUpdate(
+          { phone: cleanPhone },
+          { $addToSet: { fcmTokens: deviceToken } },
+          { new: true }
+        )
+        if (own) updated = true
+      }
+    }
+
+    // 3. Also if JWT authenticated user exists on req.user
+    if (req.user?.id) {
+      if (role === 'owner' || req.user.role === 'owner') {
+        await Owner.findByIdAndUpdate(req.user.id, { $addToSet: { fcmTokens: deviceToken } })
+        updated = true
+      } else if (role === 'customer' || req.user.role === 'customer') {
+        await Customer.findByIdAndUpdate(req.user.id, { $addToSet: { fcmTokens: deviceToken } })
+        updated = true
+      }
+    }
+
+    return successResponse(res, 'FCM token registered successfully', {
+      token: deviceToken,
+      registered: true,
+      userMatched: updated,
+    })
+  } catch (err) {
+    return errorResponse(res, 'Failed to register token', 500, err.message)
+  }
+}
+
+// 8. Test FCM Push Notification to all registered devices
+export const testPushNotification = async (req, res) => {
+  try {
+    const [customers, owners, devices] = await Promise.all([
+      Customer.find({ 'fcmTokens.0': { $exists: true } }, 'name phone fcmTokens'),
+      Owner.find({ 'fcmTokens.0': { $exists: true } }, 'name phone fcmTokens'),
+      DeviceToken.find({}, 'token phone role'),
+    ])
+
+    let allTokens = []
+    customers.forEach((c) => allTokens.push(...(c.fcmTokens || [])))
+    owners.forEach((o) => allTokens.push(...(o.fcmTokens || [])))
+    devices.forEach((d) => {
+      if (d.token) allTokens.push(d.token)
+    })
+
+    allTokens = [...new Set(allTokens.filter((t) => typeof t === 'string' && t.trim().length > 10))]
+
+    if (allTokens.length === 0) {
+      return successResponse(res, 'No registered devices found. Open the mobile app first to generate and sync an FCM token!', {
+        tokenCount: 0,
+        customerCount: customers.length,
+        ownerCount: owners.length,
+        deviceCount: devices.length,
+        status: 'no_tokens',
+      })
+    }
+
+    const testTitle = '🔔 MachineWala Test Notification'
+    const testBody = `FCM Push test successful! Sent at ${new Date().toLocaleTimeString('en-US')}`
+
+    const sendResult = await sendPushNotification({
+      tokens: allTokens,
+      title: testTitle,
+      body: testBody,
+      data: { type: 'TEST_NOTIFICATION', time: new Date().toISOString() },
+    })
+
+    return successResponse(res, 'Test notification dispatched successfully!', {
+      tokenCount: allTokens.length,
+      customersWithToken: customers.length,
+      ownersWithToken: owners.length,
+      deviceTokens: devices.length,
+      firebaseResult: sendResult,
+    })
+  } catch (err) {
+    return errorResponse(res, 'Failed to send test push notification', 500, err.message)
+  }
+}
+
+
+

@@ -1,5 +1,6 @@
 import { Listing } from '../models/Listing.js'
 import { successResponse, errorResponse } from '../utils/apiResponse.js'
+import { notifyOwnerOnListingStatusChange } from '../utils/ownerNotificationService.js'
 
 /**
  * Get listings with search, filter, pagination and aggregate counts
@@ -273,6 +274,7 @@ export const updateListing = async (req, res) => {
       updateData.image = updateData.images[0]
     }
 
+    const previousStatus = listing.status
     Object.assign(listing, updateData)
 
     listing.history.push({
@@ -282,6 +284,14 @@ export const updateListing = async (req, res) => {
     })
 
     await listing.save()
+
+    // Notify owner if operational status or approval status changed
+    if (updateData.status && updateData.status !== previousStatus) {
+      notifyOwnerOnListingStatusChange({
+        listing,
+        statusType: updateData.status,
+      }).catch((err) => console.error('Error notifying owner on status update:', err))
+    }
 
     return successResponse(res, 'Listing updated successfully', listing)
   } catch (error) {
@@ -307,6 +317,12 @@ export const toggleListingStatus = async (req, res) => {
     })
 
     await listing.save()
+
+    // Send push notification & alert to listing owner
+    notifyOwnerOnListingStatusChange({
+      listing,
+      statusType: listing.status,
+    }).catch((err) => console.error('Error notifying owner on toggle status:', err))
 
     return successResponse(res, `Listing status updated to ${listing.status}`, listing)
   } catch (error) {

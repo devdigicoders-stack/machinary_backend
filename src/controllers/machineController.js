@@ -41,6 +41,10 @@ export const getMachines = async (req, res) => {
       query.machineType = machineType
     }
 
+    if (req.query.ownerId) {
+      query.ownerId = req.query.ownerId
+    }
+
     if (owner && owner !== 'All') {
       query.owner = owner
     }

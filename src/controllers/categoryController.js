@@ -7,6 +7,7 @@ export const getCategories = async (req, res) => {
     const {
       search = '',
       status = 'All',
+      categoryType = 'All',
       sortBy = 'Latest',
       page = 1,
       limit = 10,
@@ -23,6 +24,11 @@ export const getCategories = async (req, res) => {
     // Status filter
     if (status && status !== 'All') {
       query.status = status
+    }
+
+    // Category Type filter (rent, sell, transport, material)
+    if (categoryType && categoryType !== 'All') {
+      query.categoryType = categoryType.toLowerCase()
     }
 
     // Sorting
@@ -91,7 +97,7 @@ export const getCategoryById = async (req, res) => {
 // 3. Create Category
 export const createCategory = async (req, res) => {
   try {
-    const { name, description, image, icon, subcategories, machinesCount, status } = req.body
+    const { name, description, image, icon, subcategories, machinesCount, categoryType, status } = req.body
 
     if (!name || !name.trim()) {
       return errorResponse(res, 'Category name is required', 400)
@@ -118,6 +124,7 @@ export const createCategory = async (req, res) => {
       icon: icon || 'Truck',
       subcategories: parseInt(subcategories, 10) || 1,
       machinesCount: parseInt(machinesCount, 10) || 0,
+      categoryType: (categoryType || 'rent').toLowerCase(),
       status: status || 'Active',
     })
 
@@ -159,6 +166,10 @@ export const updateCategory = async (req, res) => {
 
     if (updateData.machinesCount !== undefined) {
       updateData.machinesCount = parseInt(updateData.machinesCount, 10) || 0
+    }
+
+    if (updateData.categoryType !== undefined) {
+      updateData.categoryType = (updateData.categoryType || 'rent').toLowerCase()
     }
 
     const updated = await Category.findByIdAndUpdate(id, updateData, {

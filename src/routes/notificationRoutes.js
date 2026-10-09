@@ -7,12 +7,16 @@ import {
   updateNotificationStatus,
   deleteNotification,
   bulkDelete,
+  registerToken,
+  testPushNotification,
 } from '../controllers/notificationController.js'
 
 const router = express.Router()
 
 router.get('/stats', getNotificationStats)
 router.get('/', getNotifications)
+router.post('/register-token', registerToken)
+router.post('/test-push', testPushNotification)
 router.post('/', createNotification)
 router.patch('/:id/resend', resendNotification)
 router.patch('/:id/status', updateNotificationStatus)

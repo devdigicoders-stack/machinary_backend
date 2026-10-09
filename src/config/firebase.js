@@ -1,9 +1,14 @@
-import admin from 'firebase-admin';
+import admin, { cert, initializeApp, getApps } from 'firebase-admin';
 
 let firebaseInitialized = false;
 
 export const initializeFirebase = () => {
   if (firebaseInitialized) return admin;
+
+  if (getApps().length > 0) {
+    firebaseInitialized = true;
+    return admin;
+  }
 
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
@@ -20,12 +25,14 @@ export const initializeFirebase = () => {
   }
 
   try {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey,
-      }),
+    const credential = cert({
+      projectId,
+      clientEmail,
+      privateKey,
+    });
+
+    initializeApp({
+      credential,
     });
 
     firebaseInitialized = true;

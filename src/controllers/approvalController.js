@@ -1,5 +1,6 @@
 import { Listing } from '../models/Listing.js'
 import { successResponse, errorResponse } from '../utils/apiResponse.js'
+import { notifyOwnerOnListingStatusChange } from '../utils/ownerNotificationService.js'
 
 /**
  * Get listing approvals queue with filters & stats
@@ -92,6 +93,12 @@ export const approveListing = async (req, res) => {
 
     await listing.save()
 
+    // Send push notification & SMS alert to listing owner
+    notifyOwnerOnListingStatusChange({
+      listing,
+      statusType: 'Approved',
+    }).catch((err) => console.error('Error sending approval notification to owner:', err))
+
     return successResponse(res, `Listing "${listing.title}" approved successfully`, listing)
   } catch (error) {
     return errorResponse(res, error.message, 500)
@@ -123,6 +130,14 @@ export const rejectListing = async (req, res) => {
     })
 
     await listing.save()
+
+    // Send push notification & SMS alert to listing owner
+    notifyOwnerOnListingStatusChange({
+      listing,
+      statusType: 'Rejected',
+      rejectionReason: listing.rejectionReason,
+      rejectionNote: listing.rejectionNote,
+    }).catch((err) => console.error('Error sending rejection notification to owner:', err))
 
     return successResponse(res, `Listing "${listing.title}" rejected`, listing)
   } catch (error) {

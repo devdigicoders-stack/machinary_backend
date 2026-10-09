@@ -1,4 +1,5 @@
 import { getFirebaseAdmin } from '../config/firebase.js';
+import { getMessaging } from 'firebase-admin/messaging';
 
 /**
  * Send FCM Push Notification to single device or multiple tokens
@@ -22,6 +23,8 @@ export const sendPushNotification = async ({
     console.warn('⚠️ [FCM] Firebase admin not initialized, skipping push notification');
     return { success: false, reason: 'Firebase not configured' };
   }
+
+  const messaging = getMessaging();
 
   // Normalize tokens to non-empty array
   const tokenList = (Array.isArray(tokens) ? tokens : [tokens]).filter(
@@ -47,7 +50,7 @@ export const sendPushNotification = async ({
   try {
     if (tokenList.length === 1) {
       // Single token send
-      const response = await admin.messaging().send({
+      const response = await messaging.send({
         token: tokenList[0],
         notification,
         data: sanitizedData,
@@ -56,6 +59,10 @@ export const sendPushNotification = async ({
           notification: {
             sound: 'default',
             channelId: 'machinewala_high_importance',
+            priority: 'max',
+            visibility: 'public',
+            defaultSound: true,
+            defaultVibrateTimings: true,
             clickAction: 'FLUTTER_NOTIFICATION_CLICK',
             ...(imageUrl ? { imageUrl } : {}),
           },
@@ -65,7 +72,7 @@ export const sendPushNotification = async ({
       return { success: true, messageId: response };
     } else {
       // Multicast send
-      const response = await admin.messaging().sendEachForMulticast({
+      const response = await messaging.sendEachForMulticast({
         tokens: tokenList,
         notification,
         data: sanitizedData,
@@ -74,6 +81,10 @@ export const sendPushNotification = async ({
           notification: {
             sound: 'default',
             channelId: 'machinewala_high_importance',
+            priority: 'max',
+            visibility: 'public',
+            defaultSound: true,
+            defaultVibrateTimings: true,
             clickAction: 'FLUTTER_NOTIFICATION_CLICK',
             ...(imageUrl ? { imageUrl } : {}),
           },

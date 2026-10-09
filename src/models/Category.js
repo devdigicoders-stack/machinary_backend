@@ -9,6 +9,11 @@ const categorySchema = new mongoose.Schema(
     icon: { type: String, default: 'Truck' },
     subcategories: { type: Number, default: 1 },
     machinesCount: { type: Number, default: 0 },
+    categoryType: {
+      type: String,
+      default: 'rent',
+      enum: ['rent', 'sell', 'transport', 'material'],
+    },
     status: {
       type: String,
       default: 'Active',
