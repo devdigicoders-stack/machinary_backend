@@ -1,4 +1,5 @@
 import { Category } from '../models/Category.js'
+import { Listing } from '../models/Listing.js'
 import { successResponse, errorResponse } from '../utils/apiResponse.js'
 
 // 1. Get All Categories (with Search, Filter, Sort, Pagination, Live Stats)
@@ -61,8 +62,22 @@ export const getCategories = async (req, res) => {
     const totalSubcategories = allCats.reduce((acc, curr) => acc + (curr.subcategories || 0), 0)
     const totalPages = Math.ceil(totalFiltered / limitNum) || 1
 
+    // Attach dynamic live count of active listings per category
+    const categoriesWithLiveCounts = await Promise.all(
+      categories.map(async (cat) => {
+        const catNameRegex = new RegExp(`^${cat.name?.trim()}$`, 'i')
+        const liveListingCount = await Listing.countDocuments({
+          $or: [{ category: catNameRegex }, { category: cat.name }]
+        })
+        return {
+          ...cat,
+          machinesCount: liveListingCount > 0 ? liveListingCount : (cat.machinesCount || 0),
+        }
+      })
+    )
+
     return successResponse(res, 'Categories retrieved successfully', {
-      categories,
+      categories: categoriesWithLiveCounts,
       pagination: {
         total: totalFiltered,
         page: pageNum,
@@ -84,11 +99,22 @@ export const getCategories = async (req, res) => {
 // 2. Get Single Category by ID
 export const getCategoryById = async (req, res) => {
   try {
-    const category = await Category.findById(req.params.id)
+    const category = await Category.findById(req.params.id).lean()
     if (!category) {
       return errorResponse(res, 'Category not found', 404)
     }
-    return successResponse(res, 'Category details retrieved', category)
+
+    const catNameRegex = new RegExp(`^${category.name?.trim()}$`, 'i')
+    const liveListingCount = await Listing.countDocuments({
+      $or: [{ category: catNameRegex }, { category: category.name }]
+    })
+
+    const categoryWithLiveCount = {
+      ...category,
+      machinesCount: liveListingCount > 0 ? liveListingCount : (category.machinesCount || 0),
+    }
+
+    return successResponse(res, 'Category details retrieved', categoryWithLiveCount)
   } catch (error) {
     return errorResponse(res, error.message, 500)
   }
