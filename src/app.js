@@ -7,15 +7,29 @@ import { notFoundHandler, errorHandler } from './middlewares/errorMiddleware.js'
 const app = express()
 
 // Global Middlewares
+const allowedOrigins = [
+  'https://machinary-frontend-ten.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:5000',
+]
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow all origins for seamless development across Flutter Web, Admin, and mobile apps
-      callback(null, true)
+      // Allow requests with no origin (like mobile apps, curl, Postman) or matched/any origin
+      if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+        callback(null, true)
+      } else {
+        callback(null, true) // Still allow other origins for Flutter Web & development
+      }
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   })
 )
+app.options('*', cors())
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
